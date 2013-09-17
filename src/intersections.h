@@ -17,7 +17,7 @@ __host__ __device__ glm::vec3 getPointOnRay(ray r, float t);
 __host__ __device__ glm::vec3 multiplyMV(cudaMat4 m, glm::vec4 v);
 __host__ __device__ glm::vec3 getSignOfRay(ray r);
 __host__ __device__ glm::vec3 getInverseDirectionOfRay(ray r);
-__host__ __device__ float boxIntersectionTest(staticGeom sphere, ray r, glm::vec3& intersectionPoint, glm::vec3& normal);
+__host__ __device__ float boxIntersectionTest(staticGeom box, ray r, glm::vec3& intersectionPoint, glm::vec3& normal);
 __host__ __device__ float sphereIntersectionTest(staticGeom sphere, ray r, glm::vec3& intersectionPoint, glm::vec3& normal);
 __host__ __device__ glm::vec3 getRandomPointOnCube(staticGeom cube, float randomSeed);
 
@@ -71,8 +71,78 @@ __host__ __device__ glm::vec3 getSignOfRay(ray r){
 //TODO: IMPLEMENT THIS FUNCTION
 //Cube intersection test, return -1 if no intersection, otherwise, distance to intersection
 __host__ __device__ float boxIntersectionTest(staticGeom box, ray r, glm::vec3& intersectionPoint, glm::vec3& normal){
+  
+  // Find the inverse transformed ray in the origin centered coordinates
+  glm::vec3 ro = multiplyMV(box.inverseTransform, glm::vec4(r.origin, 1.0f));
+  glm::vec3 rd = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
+  ray rt; rt.origin = ro; rt.direction = rd;
 
-    return -1;
+  // Find the inverse direction ray avoiding -/+ 0 determination
+  glm::vec3 inverseDirection     = getInverseDirectionOfRay(rt);
+  glm::vec3 signInverseDirection = getSignOfRay(rt);
+
+  // Find the bounding volumn's maximum and minimum extent t1/t0
+  glm::vec3 t0, t1;
+  /*
+  t0 = (glm::vec3(-.5, -.5, -.5) - ro) * inverseDirection;
+  t1 = (glm::vec3(.5, .5, .5) - ro) * inverseDirection;
+  if (signInverseDirection.x <0){
+      swap(t0.x, t1.x);
+  }
+  if (signInverseDirection.y <0){
+      swap(t0.y, t1.y);
+  }
+  if (signInverseDirection.z <0){
+      swap(t0.z, t1.z);
+  }
+  */
+  if (signInverseDirection.x >=0){
+	  t0.x = (-.5 - ro.x) * inverseDirection.x;
+	  t1.x = (.5 - ro.x) * inverseDirection.x;
+  }else{
+	  t0.x = (.5- ro.x) * inverseDirection.x;
+	  t1.x = (-.5 - ro.x) * inverseDirection.x;
+  }
+  if (signInverseDirection.y >=0){
+	  t0.y = (-.5 - ro.y) * inverseDirection.y;
+	  t1.y = (.5 - ro.y) * inverseDirection.y;
+  }else{
+	  t0.y = (.5- ro.y) * inverseDirection.y;
+	  t1.y = (-.5 - ro.y) * inverseDirection.y;
+  }
+  if (signInverseDirection.x >=0){
+	  t0.z = (-.5 - ro.z) * inverseDirection.z;
+	  t1.z = (.5 - ro.z) * inverseDirection.z;
+  }else{
+	  t0.z = (.5- ro.z) * inverseDirection.z;
+	  t1.z = (-.5 - ro.z) * inverseDirection.z;
+  }
+  
+  // Compare maxima and minima to determine the intersections
+  if ((t0.x > t1.y) || (t0.y > t1.x))
+	  return -1;
+
+  float tmin, tmax;
+  tmin = (t0.x > t0.y) ? t0.x : t0.y;
+  tmax = (t1.x < t1.y) ? t1.x : t1.y;
+
+  if ((tmin > t1.z) || (t0.z > tmax))
+	  return -1;
+  float t = (tmin > t0.z) ? tmin : t0.z;
+    
+  if(t < 0)
+	  return -1;
+
+  // TODO: Deal with the infinity inverseDirection ...
+
+  // Find the distance between real intersection point and the origin
+  glm::vec3 realIntersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(rt, t), 1.0));
+  glm::vec3 realOrigin = multiplyMV(box.transform, glm::vec4(0,0,0,1));
+
+  intersectionPoint = realIntersectionPoint;
+  normal = glm::normalize(realIntersectionPoint - realOrigin);
+        
+  return glm::length(r.origin - realIntersectionPoint);
 }
 
 //LOOK: Here's an intersection test example from a sphere. Now you just need to figure out cube and, optionally, triangle.
@@ -101,9 +171,9 @@ __host__ __device__ float sphereIntersectionTest(staticGeom sphere, ray r, glm::
   if (t1 < 0 && t2 < 0) {
       return -1;
   } else if (t1 > 0 && t2 > 0) {
-      t = min(t1, t2);
+      t = glm::min(t1, t2); // min
   } else {
-      t = max(t1, t2);
+      t = glm::max(t1, t2); // max
   }
 
   glm::vec3 realIntersectionPoint = multiplyMV(sphere.transform, glm::vec4(getPointOnRay(rt, t), 1.0));
@@ -176,9 +246,23 @@ __host__ __device__ glm::vec3 getRandomPointOnCube(staticGeom cube, float random
 //TODO: IMPLEMENT THIS FUNCTION
 //Generates a random point on a given sphere
 __host__ __device__ glm::vec3 getRandomPointOnSphere(staticGeom sphere, float randomSeed){
+	
+	// Generate random number
+	thrust::default_random_engine rng(hash(randomSeed));
+	thrust::uniform_real_distribution<float> u01(0,TWO_PI);
+	thrust::uniform_real_distribution<float> u02(0,PI);
 
-  return glm::vec3(0,0,0);
-}
+	// Two independent variable expressing the point
+	float theta, phi;
+	theta = (float)u01(rng);
+	phi   = (float)u02(rng);
+	
+	// Transform back to the real sphere coordinates
+	glm::vec3 point(cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi));
+	glm::vec3 randPoint = multiplyMV(sphere.transform, glm::vec4(point,1.0f));
+
+	return randPoint;
+	}
 
 #endif
 
