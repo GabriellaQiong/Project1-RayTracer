@@ -159,20 +159,22 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		colors[index] = materials[materialIndex].color;
 	  }else{
 		// Find the inverse light ray from intersection point to a random point on the light source
-		ray inverseLightRay;
+		ray lightRay, inverseLightRay, reflectionRay;
 		inverseLightRay.origin = intersectionPoint;
 	    for(int i = 0; i < numberOfLights; ++ i){
 		  int lightIndex = lights[i];
 		  if(geoms[lightIndex].type == SPHERE){
-		    inverseLightRay.origin = getRandomPointOnSphere(geoms[lightIndex], time * index);
+		    lightRay.origin = getRandomPointOnSphere(geoms[lightIndex], time * index);
 		  }else if(geoms[lightIndex].type == CUBE){
-			inverseLightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
+			lightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
 		  }
-		  inverseLightRay.direction = glm::normalize(inverseLightRay.origin - intersectionPoint);
+		  inverseLightRay.direction = glm::normalize( (inverseLightRay.origin - lightRay.origin));
 		  float lightDistance = glm::distance(inverseLightRay.origin,intersectionPoint);
 		  // Using the distance from the light source to the intersection point to determine whether the light is obstructed by other objects
 		  bool lightFlag = true;
 		  for(int j = 0; j < numberOfGeoms; ++ j){
+			if (j == lightIndex)
+				continue;
 		    if(geoms[j].type == SPHERE){
 		      updateDistance = sphereIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
 			  if(updateDistance != -1 && updateDistance < lightDistance){
@@ -186,6 +188,19 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 				break;
 			  }
 		    }
+			//
+			if (lightFlag == true){
+			  //Factors for diffusion and shading
+			  float diffusionCoefficient = 0.7f;
+			  float specularCoefficient  = 0.2f;
+			  //Lambertian Surface Diffusion
+			  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
+			  colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color;
+			  //Phong Lighting
+			  reflectionRay.direction = calculateReflectionDirection(normal, -inverseLightRay.direction);
+			  float specular = specularCoefficient* pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
+			  colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor;
+			}
 		  }
 	    }
 		colors[index] = glm::vec3(0, 0, 0);
@@ -193,8 +208,7 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 
 	  // Phong lighting equation: ambient + diffuse + specular =  phong reflection
 
-	  // Lambert Shading 
-
+	  
     //colors[index] = generateRandomNumberFromThread(resolution, time, x, y);
    }
 }
