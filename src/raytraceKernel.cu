@@ -124,6 +124,7 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 	  glm::vec3 updateIntersectionPoint, intersectionPoint;
 	  glm::vec3 updateNormal, normal;
 
+	  // Find the nearest object to the camera
 	  for(int i = 0; i < numberOfGeoms; ++ i){
 		  glm::vec3 updateIntersectionPoint, updateNormal;
 		  if(geoms[i].type == SPHERE){
@@ -145,6 +146,7 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		  }
 	  }
 
+	  // If there is no object, return the black color
 	  if(objectIndex != -1){
 	    colors[index] = glm::vec3(0, 0, 0);
 	    return;
@@ -170,6 +172,7 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		  }
 		  inverseLightRay.direction = glm::normalize( (inverseLightRay.origin - lightRay.origin));
 		  float lightDistance = glm::distance(inverseLightRay.origin,intersectionPoint);
+
 		  // Using the distance from the light source to the intersection point to determine whether the light is obstructed by other objects
 		  bool lightFlag = true;
 		  for(int j = 0; j < numberOfGeoms; ++ j){
@@ -188,14 +191,17 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 				break;
 			  }
 		    }
-			//
+
+			// If there is light on the object then compute the diffusion and the highlighting
 			if (lightFlag == true){
-			  //Factors for diffusion and shading
+			  // Factors for diffusion and shading
 			  float diffusionCoefficient = 0.7f;
 			  float specularCoefficient  = 0.2f;
+
 			  //Lambertian Surface Diffusion
 			  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
 			  colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color;
+
 			  //Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
 			  reflectionRay.direction = calculateReflectionDirection(normal, -inverseLightRay.direction);
 			  float specular = specularCoefficient * pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
