@@ -196,19 +196,14 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 			  //Lambertian Surface Diffusion
 			  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
 			  colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color;
-			  //Phong Lighting
+			  //Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
 			  reflectionRay.direction = calculateReflectionDirection(normal, -inverseLightRay.direction);
-			  float specular = specularCoefficient* pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
+			  float specular = specularCoefficient * pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
 			  colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor;
 			}
 		  }
 	    }
-		colors[index] = glm::vec3(0, 0, 0);
 	  }
-
-	  // Phong lighting equation: ambient + diffuse + specular =  phong reflection
-
-	  
     //colors[index] = generateRandomNumberFromThread(resolution, time, x, y);
    }
 }
