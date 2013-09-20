@@ -110,65 +110,79 @@ __global__ void sendImageToPBO(uchar4* PBOpos, glm::vec2 resolution, glm::vec3* 
 __global__ void raytraceRay(glm::vec2 resolution, float time, material* materials, int numberOfMaterials, cameraData cam, int rayDepth, glm::vec3* colors,
                             staticGeom* geoms, int numberOfGeoms, int* lights, int numberOfLights){
 
+
   int x = (blockIdx.x * blockDim.x) + threadIdx.x;
   int y = (blockIdx.y * blockDim.y) + threadIdx.y;
   int index = x + (y * resolution.x);
 
-  if((x<=resolution.x && y<=resolution.y)){
-	  // Generate the ray
-	  ray cameraRay = raycastFromCameraKernel(resolution, time, x, y, cam.position, cam.view, cam.up, cam.fov);
-	  
-		// Initialize the object index, distance and the intersection point and the normal
-	  int objectIndex = -1;
-	  float updateDistance, distance = 1e8;
-	  glm::vec3 updateIntersectionPoint, intersectionPoint;
-	  glm::vec3 updateNormal, normal;
+	//colors[index] = generateRandomNumberFromThread(resolution, time, x, y);
+	//return;
 
-	  // Find the nearest object to the camera
-	  for(int i = 0; i < numberOfGeoms; ++ i){
-		  glm::vec3 updateIntersectionPoint, updateNormal;
-		  if(geoms[i].type == SPHERE){
-		    updateDistance = sphereIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
-			if(updateDistance != -1 && updateDistance < distance){
+	// Skip the pixels outside the image
+	if((x > resolution.x && y > resolution.y)){
+		return;
+	}
+	// Generate the ray
+	ray cameraRay = raycastFromCameraKernel(resolution, time, x, y, cam.position, cam.view, cam.up, cam.fov);
+	  
+	// Initialize the object index, distance and the intersection point and the normal
+  int objectIndex = -1;
+  float updateDistance, distance = 1e7;
+  glm::vec3 updateIntersectionPoint, intersectionPoint;
+  glm::vec3 updateNormal, normal;
+
+  // Find the nearest object to the camera
+	for(int i = 0; i < numberOfGeoms; ++ i) {
+	  glm::vec3 updateIntersectionPoint, updateNormal;
+	  if(geoms[i].type == SPHERE){
+	    updateDistance = sphereIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
+	    if(updateDistance != -1 && updateDistance < distance){
+	      distance = updateDistance;
+		    intersectionPoint = updateIntersectionPoint;
+		    normal = updateNormal;
+		    objectIndex = i;
+		  }
+	  } else if(geoms[i].type == CUBE) {
+	 	  updateDistance = boxIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
+		  if(updateDistance != -1 && updateDistance < distance){
 			  distance = updateDistance;
 			  intersectionPoint = updateIntersectionPoint;
 			  normal = updateNormal;
 			  objectIndex = i;
-			}
-		  }else if (geoms[i].type == CUBE){
-			  updateDistance = boxIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
-			  if(updateDistance != -1 && updateDistance < distance){
-				distance = updateDistance;
-			    intersectionPoint = updateIntersectionPoint;
-			    normal = updateNormal;
-			    objectIndex = i;
-			}
 		  }
-	  }
+	  } // if type
+  } // for i
 
-	  // If there is no object, return the black color
-	  if(objectIndex != -1){
-	    colors[index] = glm::vec3(0, 0, 0);
-	    return;
-	  }
+	// If there is no object, return the black color
+	colors[index] = glm::vec3(0, 0, 0);
+	
+	if(objectIndex == -1){
+	  return;
+	}
+
+
 	  
-	  // Initialize the material index
-	  int materialIndex = geoms[objectIndex].materialid;
+	// Initialize the material index
+	int materialIndex = geoms[objectIndex].materialid;
+	//materialIndex = materialIndex >=0 ? materialIndex : 0;
+	//materialIndex = materialIndex < numberOfMaterials ? materialIndex : 0;
 
-	  // Determine if the object itself can be treated as light source
-	  if(materials[materialIndex].emittance > 0){
-		// If the object is a light source, then the color in the image is it own
+
+
+	// Determine if the object itself can be treated as light source
+	if(materials[materialIndex].emittance > 0) {
+	  // If the object is a light source, then the color in the image is it own
 		colors[index] = materials[materialIndex].color;
-	  }else{
+	} else {
 		// Find the inverse light ray from intersection point to a random point on the light source
 		ray lightRay, inverseLightRay, reflectionRay;
 		inverseLightRay.origin = intersectionPoint;
-	    for(int i = 0; i < numberOfLights; ++ i){
+	  for(int i = 0; i < numberOfLights; ++ i) {
 		  int lightIndex = lights[i];
-		  if(geoms[lightIndex].type == SPHERE){
+		  if(geoms[lightIndex].type == SPHERE) {
 		    lightRay.origin = getRandomPointOnSphere(geoms[lightIndex], time * index);
-		  }else if(geoms[lightIndex].type == CUBE){
-			lightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
+		  } else if(geoms[lightIndex].type == CUBE) {
+			  lightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
 		  }
 		  inverseLightRay.direction = glm::normalize( (inverseLightRay.origin - lightRay.origin));
 		  float lightDistance = glm::distance(inverseLightRay.origin,intersectionPoint);
@@ -176,44 +190,40 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		  // Using the distance from the light source to the intersection point to determine whether the light is obstructed by other objects
 		  bool lightFlag = true;
 		  for(int j = 0; j < numberOfGeoms; ++ j){
-			if (j == lightIndex)
-				continue;
+			  if (j == lightIndex)
+				  continue;
 		    if(geoms[j].type == SPHERE){
 		      updateDistance = sphereIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
-			  if(updateDistance != -1 && updateDistance < lightDistance){
-			    lightFlag = false;
-			    break;
-			  }
+			    if(updateDistance != -1 && updateDistance < lightDistance){
+			      lightFlag = false;
+			      break;
+			    }
 		    }else if (geoms[j].type == CUBE){
-			  updateDistance = boxIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
-			  if(updateDistance != -1 && updateDistance < lightDistance){
-				lightFlag = false;
-				break;
-			  }
+			    updateDistance = boxIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
+			    if(updateDistance != -1 && updateDistance < lightDistance){
+				    lightFlag = false;
+				    break;
+		 	    }
 		    }
+			} // for j
+		  // If there is light on the object then compute the diffusion and the highlighting
+	    if (lightFlag == true){
+	      // Factors for diffusion and shading
+	      float diffusionCoefficient = 0.7f;
+		    float specularCoefficient  = 0.2f;
 
-			// If there is light on the object then compute the diffusion and the highlighting
-			if (lightFlag == true){
-			  // Factors for diffusion and shading
-			  float diffusionCoefficient = 0.7f;
-			  float specularCoefficient  = 0.2f;
-
-			  //Lambertian Surface Diffusion
-			  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
-			  colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color;
-
-			  //Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
-			  reflectionRay.direction = calculateReflectionDirection(normal, -inverseLightRay.direction);
-			  float specular = specularCoefficient * pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
-			  colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor;
-			}
-		  }
-	    }
-	  }
-    //colors[index] = generateRandomNumberFromThread(resolution, time, x, y);
-   }
-}
-
+  		  //Lambertian Surface Diffusion
+	  	  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
+		    colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color;
+	  	  //Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
+		    reflectionRay.direction = calculateReflectionDirection(normal, -inverseLightRay.direction);
+		    float specular = specularCoefficient * pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
+		    colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor;
+			} // if lightFlag
+    } // for i
+	} // if material
+} // end of function
+ 
 //TODO: FINISH THIS FUNCTION
 // Wrapper for the __global__ call that sets up the kernel calls and does a ton of memory management
 void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iterations, material* materials, int numberOfMaterials, geom* geoms, int numberOfGeoms){
@@ -259,14 +269,14 @@ void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iteratio
   cudaMemcpy( cudageoms, geomList, numberOfGeoms*sizeof(staticGeom), cudaMemcpyHostToDevice);
   
   // Package materials
-  glm::vec3* cudamaterials = NULL;
-  cudaMalloc((void**)&cudamaterials, (int)renderCam->resolution.x*(int)renderCam->resolution.y*sizeof(glm::vec3));
-  cudaMemcpy( cudamaterials, materials, (int)renderCam->resolution.x*(int)renderCam->resolution.y*sizeof(glm::vec3), cudaMemcpyHostToDevice);
+  material* cudamaterials = NULL;
+  cudaMalloc((void**)&cudamaterials, numberOfMaterials*sizeof(material));
+  cudaMemcpy( cudamaterials, materials, numberOfMaterials*sizeof(material), cudaMemcpyHostToDevice);
 
   // Package lights
   int* cudalights = NULL;
-  cudaMalloc((void**)&cudalights, numberOfLights * sizeof(lights));
-  cudaMemcpy(cudalights, lights, numberOfLights * sizeof(lights), cudaMemcpyHostToDevice);
+  cudaMalloc((void**)&cudalights, numberOfLights * sizeof(int));
+  cudaMemcpy(cudalights, lights, numberOfLights * sizeof(int), cudaMemcpyHostToDevice);
 
   //package camera
   cameraData cam;
@@ -277,7 +287,7 @@ void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iteratio
   cam.fov = renderCam->fov;
 
   //kernel launches
-  raytraceRay<<<fullBlocksPerGrid, threadsPerBlock>>>(renderCam->resolution, (float)iterations, materials, numberOfMaterials, cam, traceDepth, cudaimage, cudageoms, numberOfGeoms, lights, numberOfLights);
+  raytraceRay<<<fullBlocksPerGrid, threadsPerBlock>>>(renderCam->resolution, (float)iterations, cudamaterials, numberOfMaterials, cam, traceDepth, cudaimage, cudageoms, numberOfGeoms, cudalights, numberOfLights);
 
   sendImageToPBO<<<fullBlocksPerGrid, threadsPerBlock>>>(PBOpos, renderCam->resolution, cudaimage);
 
