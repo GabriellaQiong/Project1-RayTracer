@@ -13,7 +13,7 @@ Qiong Wang
 Considering each pixel in the image, we can find one ray from the camera. Along the ray, we can find the nearest object in the environment. And after determining whether the object is the light source, we can find specific color on the intersection and then pull it back on the pixel in the image. When computing the color of the intersection point, the diffusion, specular, ambient light are all considered for rendering the whole environment.
 
 * Features implemented
-* 
+ 
    Raycasting from a camera into a scene through a pixel grid
 
    Phong lighting for one point light source
