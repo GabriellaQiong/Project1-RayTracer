@@ -90,105 +90,107 @@ __host__ __device__ float boxIntersectionTest(staticGeom box, ray r, glm::vec3& 
 
   // Find the bounding volumn's maximum and minimum extent t1/t0
   glm::vec3 t0, t1;
-
-	if (signInverseDirection.x == 0){
-	  t0.x = (-.5 - ro.x) * inverseDirection.x;
-	  t1.x = (.5 - ro.x) * inverseDirection.x;
-  }else{
-	  t0.x = (.5- ro.x) * inverseDirection.x;
-	  t1.x = (-.5 - ro.x) * inverseDirection.x;
-  }
-  if (signInverseDirection.y == 0){
-	  t0.y = (-.5 - ro.y) * inverseDirection.y;
-	  t1.y = (.5 - ro.y) * inverseDirection.y;
-  }else{
-	  t0.y = (.5- ro.y) * inverseDirection.y;
-	  t1.y = (-.5 - ro.y) * inverseDirection.y;
-  }
-  if (signInverseDirection.x == 0){
-	  t0.z = (-.5 - ro.z) * inverseDirection.z;
-	  t1.z = (.5 - ro.z) * inverseDirection.z;
-  }else{
-	  t0.z = (.5- ro.z) * inverseDirection.z;
-	  t1.z = (-.5 - ro.z) * inverseDirection.z;
-  }
+  t0.x = (0.5 * (2 * signInverseDirection.x - 1) - ro.x) * inverseDirection.x;
+	t1.x = (0.5 * (1 - 2 * signInverseDirection.x) - ro.x) * inverseDirection.x;
+  t0.y = (0.5 * (2 * signInverseDirection.y - 1) - ro.y) * inverseDirection.y;
+	t1.y = (0.5 * (1 - 2 * signInverseDirection.y) - ro.y) * inverseDirection.y;
+	t0.z = (0.5 * (2 * signInverseDirection.z - 1) - ro.z) * inverseDirection.z;
+	t1.z = (0.5 * (1 - 2 * signInverseDirection.z) - ro.z) * inverseDirection.z;
   
 	// Surface flags to point out which is the nearest and farthest surface along the intersection direction
 	int nearFlag, farFlag;  // which can be one value in pool of {1, 2, 3}, respectively indicating two surfaces along x || y || z axis
-
+	
   // Compare maxima and minima to determine the intersections
 	if(t0.x < 0 && t1.x < 0)
 		return -1;            // whether there is only inverse intersection
 
 	if(t0.x > 0) {
 	  tmin     = (tmin > t0.x) ? tmin : t0.x;
-		nearFlag = 1;         // update tmin if t0.x is positive and finite and set x to be the nearest surface axis
+		if(tmin == t0.x)
+		  nearFlag = 1;         // update tmin if t0.x is positive and finite and set x to be the nearest surface axis
 	}
-	if(t1.x > 0 && t1.x < tmax ) {
+	if(t1.x > 0) {
 	  tmax    = (tmax < t1.x) ? tmax : t1.x;
-		farFlag = 1;          // update tmax if t1.x is positive and finite and set x to be the nearest surface axis
+		if(tmax == t1.x)
+		  farFlag = 1;          // update tmax if t1.x is positive and finite and set x to be the nearest surface axis
 	}
 
 	// Then compare the current tmin and tmax with y, update
 	if(t0.y < 0 && t1.y < 0)
 		return -1;
-
-	if((tmin > t1.y) || (t0.y > tmax))
+	if(tmin > t1.y || t0.y > tmax)
 	  return -1;            // whether the ray passes around the cube
 
-  if(t0.y > 0) {
+	if(t0.y > 0) {
 	  tmin     = (tmin > t0.y) ? tmin : t0.y;
-		nearFlag = 2;         // update tmin if t0.y is positive and larger than tmin and set y to be the nearest surface axis
+		if(tmin == t0.y)
+		  nearFlag = 2;         // update tmin if t0.y is positive and larger than tmin and set y to be the nearest surface axis
 	}
 	if(t1.y > 0) {
 	  tmax    = (tmax < t1.y) ? tmax : t1.y;
-		farFlag = 2;          // update tmax if t1.y is positive and less than tmax and set y to be the nearest surface axis
+		if(tmax == t1.y)
+		  farFlag = 2;          // update tmax if t1.y is positive and less than tmax and set y to be the nearest surface axis
 	}
 
   // Then compare the current tmin and tmax with z, update
   if(t0.z < 0 && t1.z < 0)
 		return -1;
-
-  if((tmin > t1.z) || (t0.z > tmax))
+	if(tmin > t1.z || t0.z > tmax)
 	  return -1;
 
 	if(t0.z > 0) {
 	  tmin     = (tmin > t0.z) ? tmin : t0.z;
-		nearFlag = 3;         // update tmin if t0.z is positive and larger than tmin and set z to be the nearest surface axis
+		if(tmin == t0.z)
+		  nearFlag = 3;         // update tmin if t0.z is positive and larger than tmin and set z to be the nearest surface axis
 	}
-	if(t1.z > 0) {
+	if(t1.z > 0 && t1.z < tmax) {
 	  tmax    = (tmax < t1.z) ? tmax : t1.z;
-		farFlag = 3;          // update tmax if t1.z is positive and less than tmax and set z to be the nearest surface axis
+		if(tmax == t1.z)
+		  farFlag = 3;          // update tmax if t1.z is positive and less than tmax and set z to be the nearest surface axis
 	}
 
+	glm::vec3 intersectionPointTmp, normalTmp;
 	// Update the normal and intersection point if the tmax or tmax are not all infinity
 	if(epsilonCheck(tmin, minLimit) == 0) {
-		intersectionPoint = getPointOnRay(rt, tmin);
+		intersectionPointTmp = getPointOnRay(rt, tmin);
 		if(nearFlag == 1) {
-		  normal = glm::vec3(-signInverseDirection.x, 0, 0);  
+		  normalTmp = glm::vec3(-1, 0, 0); 
+			if(signInverseDirection.x)
+				normalTmp.x = 1;
 		} else if(nearFlag == 2) {
-		  normal = glm::vec3(0, -signInverseDirection.y, 0);
-		} else {
-		  normal = glm::vec3(0, 0, -signInverseDirection.z);
+		  normalTmp = glm::vec3(0, -1, 0);
+			if(signInverseDirection.y)
+				normalTmp.y = 1;
+		} else if(nearFlag ==3){
+		  normalTmp = glm::vec3(0, 0, -1);
+			if(signInverseDirection.z)
+				normalTmp.z = 1;
 		}
 	} else if(epsilonCheck(tmax, maxLimit) == 0) {
-		intersectionPoint = getPointOnRay(rt, tmax);
+		intersectionPointTmp = getPointOnRay(rt, tmax);
 		if(farFlag == 1) {
-		  normal = glm::vec3(signInverseDirection.x, 0, 0);
+		  normalTmp = glm::vec3(-1, 0, 0);
+			if(signInverseDirection.x)
+				normalTmp.x = 1;
 		} else if(farFlag == 2) {
-		  normal = glm::vec3(0, signInverseDirection.y, 0);
+		  normalTmp = glm::vec3(0, -1, 0);
+			if(signInverseDirection.y)
+				normalTmp.y = 1;
 		} else {
-		  normal = glm::vec3(0, 0, signInverseDirection.z);
+		  normalTmp = glm::vec3(0, 0, -1);
+			if(signInverseDirection.z)
+				normalTmp.z = 1;
 		}
 	} else {
 		return -1;
 	}
 
 	// Find the distance between real intersection point and transform back the normal
-  glm::vec3 realIntersectionPoint = multiplyMV(box.transform, glm::vec4(intersectionPoint, 1.0f));
+  glm::vec3 realIntersectionPoint = multiplyMV(box.transform, glm::vec4(intersectionPointTmp, 1.0f));
   intersectionPoint = realIntersectionPoint;
-	normal = glm::normalize(multiplyMV(box.transform, glm::vec4(normal, 0.0f)));
+	normal = glm::normalize(multiplyMV(box.transform, glm::vec4(normalTmp, 0.0f)));
   return glm::length(r.origin - realIntersectionPoint);
+
 }
 
 //LOOK: Here's an intersection test example from a sphere. Now you just need to figure out cube and, optionally, triangle.

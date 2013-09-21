@@ -115,8 +115,8 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
   int y = (blockIdx.y * blockDim.y) + threadIdx.y;
   int index = x + (y * resolution.x);
 
-	//colors[index] = generateRandomNumberFromThread(resolution, time, x, y);
-	//return;
+  // Initialize the color
+	colors[index] = glm::vec3(0, 0, 0);
 
 	// Skip the pixels outside the image
 	if((x > resolution.x && y > resolution.y)){
@@ -152,22 +152,14 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		  }
 	  } // if type
   } // for i
-
-	// If there is no object, return the black color
-	colors[index] = glm::vec3(0, 0, 0);
 	
+	// If there is no object, return
 	if(objectIndex == -1){
 	  return;
 	}
-
-
-	  
+ 
 	// Initialize the material index
 	int materialIndex = geoms[objectIndex].materialid;
-	//materialIndex = materialIndex >=0 ? materialIndex : 0;
-	//materialIndex = materialIndex < numberOfMaterials ? materialIndex : 0;
-
-
 
 	// Determine if the object itself can be treated as light source
 	if(materials[materialIndex].emittance > 0) {
@@ -184,8 +176,8 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		  } else if(geoms[lightIndex].type == CUBE) {
 			  lightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
 		  }
-		  inverseLightRay.direction = glm::normalize( (inverseLightRay.origin - lightRay.origin));
-		  float lightDistance = glm::distance(inverseLightRay.origin,intersectionPoint);
+		  inverseLightRay.direction = glm::normalize(lightRay.origin - inverseLightRay.origin);
+			float lightDistance = glm::length(lightRay.origin - intersectionPoint);
 
 		  // Using the distance from the light source to the intersection point to determine whether the light is obstructed by other objects
 		  bool lightFlag = true;
@@ -205,23 +197,26 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 				    break;
 		 	    }
 		    }
-			} // for j
+			} // for objects j
 		  // If there is light on the object then compute the diffusion and the highlighting
 	    if (lightFlag == true){
 	      // Factors for diffusion and shading
 	      float diffusionCoefficient = 0.7f;
 		    float specularCoefficient  = 0.2f;
 
-  		  //Lambertian Surface Diffusion
+  		  // Lambertian Surface Diffusion
 	  	  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
-		    colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color;
-	  	  //Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
-		    reflectionRay.direction = calculateReflectionDirection(normal, -inverseLightRay.direction);
-		    float specular = specularCoefficient * pow(max((float)glm::dot(-cameraRay.direction, reflectionRay.direction), 0.0f), materials[materialIndex].specularExponent);
-		    colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor;
+				colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color/ (float)numberOfLights;
+	  	  // Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
+		    reflectionRay.direction = calculateReflectionDirection(normal, lightRay.direction);
+		    float specular = specularCoefficient * pow(max((float)glm::dot(inverseLightRay.direction-cameraRay.direction, normal), 0.0f), materials[materialIndex].specularExponent);
+				colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor / (float)numberOfLights;
 			} // if lightFlag
-    } // for i
+    } // for i lights
 	} // if material
+	// Ambient Light
+	float ambientCoefficient   = 1e-3f;
+	colors[index] += ambientCoefficient * materials[geoms[objectIndex].materialid].color;
 } // end of function
  
 //TODO: FINISH THIS FUNCTION
@@ -231,7 +226,7 @@ void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iteratio
   int traceDepth = 1; //determines how many bounces the raytracer traces
 
   // set up crucial magic
-  int tileSize = 8;
+  int tileSize = 16;
   dim3 threadsPerBlock(tileSize, tileSize);
   dim3 fullBlocksPerGrid((int)ceil(float(renderCam->resolution.x)/float(tileSize)), (int)ceil(float(renderCam->resolution.y)/float(tileSize)));
   
