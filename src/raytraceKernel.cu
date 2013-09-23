@@ -110,121 +110,120 @@ __global__ void sendImageToPBO(uchar4* PBOpos, glm::vec2 resolution, glm::vec3* 
 __global__ void raytraceRay(glm::vec2 resolution, float time, material* materials, int numberOfMaterials, cameraData cam, int rayDepth, glm::vec3* colors,
                             staticGeom* geoms, int numberOfGeoms, int* lights, int numberOfLights){
   
-	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+  int x = (blockIdx.x * blockDim.x) + threadIdx.x;
   int y = (blockIdx.y * blockDim.y) + threadIdx.y;
   int index = x + (y * resolution.x);
 
   // Initialize the color
-	//colors[index] = glm::vec3(0);
-	glm::vec3 updateColors = glm::vec3(0);
+  glm::vec3 updateColors = glm::vec3(0);
 
-	// Skip the pixels outside the image
-	if(x > resolution.x || y > resolution.y)
-		return;
+  // Skip the pixels outside the image
+  if(x > resolution.x || y > resolution.y)
+    return;
 
-	// Generate the ray
-	ray cameraRay = raycastFromCameraKernel(resolution, time, x, y, cam.position, cam.view, cam.up, cam.fov);
+  // Generate the ray
+  ray cameraRay = raycastFromCameraKernel(resolution, time, x, y, cam.position, cam.view, cam.up, cam.fov);
 	  
-	// Initialize the object index, distance and the intersection point and the normal
+  // Initialize the object index, distance and the intersection point and the normal
   int objectIndex = -1;
   float updateDistance, distance = 1e7f;
   glm::vec3 updateIntersectionPoint, intersectionPoint;
   glm::vec3 updateNormal, normal;
 
   // Find the nearest object to the camera
-	for(int i = 0; i < numberOfGeoms; ++ i) {
-	  glm::vec3 updateIntersectionPoint, updateNormal;
-	  if(geoms[i].type == SPHERE){
-	    updateDistance = sphereIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
-	    if(updateDistance != -1 && updateDistance < distance){
-	      distance = updateDistance;
-		    intersectionPoint = updateIntersectionPoint;
-		    normal = updateNormal;
-		    objectIndex = i;
-		  }
-	  } else if(geoms[i].type == CUBE) {
-	 	  updateDistance = boxIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
-		  if(updateDistance != -1 && updateDistance < distance){
-			  distance = updateDistance;
-			  intersectionPoint = updateIntersectionPoint;
-			  normal = updateNormal;
-			  objectIndex = i;
-		  }
-	  } // if type
+  for(int i = 0; i < numberOfGeoms; ++ i) {
+    glm::vec3 updateIntersectionPoint, updateNormal;
+    if(geoms[i].type == SPHERE){
+      updateDistance = sphereIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
+      if(updateDistance != -1 && updateDistance < distance){
+        distance = updateDistance;
+        intersectionPoint = updateIntersectionPoint;
+	normal = updateNormal;
+	objectIndex = i;
+      }
+    } else if(geoms[i].type == CUBE) {
+      updateDistance = boxIntersectionTest(geoms[i], cameraRay, updateIntersectionPoint, updateNormal);
+      if(updateDistance != -1 && updateDistance < distance){
+	distance = updateDistance;
+	intersectionPoint = updateIntersectionPoint;
+	normal = updateNormal;
+	objectIndex = i;
+      }
+    } // if type
   } // for i
 	
-	// If there is no object, return
-	if(objectIndex == -1)
-	  return;
+  // If there is no object, return
+  if(objectIndex == -1)
+    return;
  
-	// Initialize the material index
-	int materialIndex = geoms[objectIndex].materialid;
+  // Initialize the material index
+  int materialIndex = geoms[objectIndex].materialid;
 
-	// Determine if the object itself can be treated as light source
-	if(materials[materialIndex].emittance > 0) {
-	  // If the object is a light source, then the color in the image is it own
-		updateColors = materials[materialIndex].color;
-	} else {
-		// Find the inverse light ray from intersection point to a random point on the light source
-		ray lightRay, inverseLightRay, reflectionRay;
-		inverseLightRay.origin = intersectionPoint;
-	  for(int i = 0; i < numberOfLights; ++ i) {
-		  int lightIndex = lights[i];
-		  if(geoms[lightIndex].type == SPHERE) {
-		    lightRay.origin = getRandomPointOnSphere(geoms[lightIndex], time * index);
-		  } else if(geoms[lightIndex].type == CUBE) {
-			  lightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
-		  }
-		  inverseLightRay.direction = glm::normalize(lightRay.origin - inverseLightRay.origin);
-			float lightDistance = glm::length(lightRay.origin - intersectionPoint);
+  // Determine if the object itself can be treated as light source
+  if(materials[materialIndex].emittance > 0) {
+    // If the object is a light source, then the color in the image is it own
+    updateColors = materials[materialIndex].color;
+  } else {
+    // Find the inverse light ray from intersection point to a random point on the light source
+    ray lightRay, inverseLightRay, reflectionRay;
+    inverseLightRay.origin = intersectionPoint;
+    for(int i = 0; i < numberOfLights; ++ i) {
+      int lightIndex = lights[i];
+      if(geoms[lightIndex].type == SPHERE) {
+        lightRay.origin = getRandomPointOnSphere(geoms[lightIndex], time * index);
+      } else if(geoms[lightIndex].type == CUBE) {
+        lightRay.origin = getRandomPointOnCube(geoms[lightIndex], time * index);
+      }
+      inverseLightRay.direction = glm::normalize(lightRay.origin - inverseLightRay.origin);
+      float lightDistance = glm::length(lightRay.origin - intersectionPoint);
 
-		  // Using the distance from the light source to the intersection point to determine whether the light is obstructed by other objects
-		  bool lightFlag = true;
-		  for(int j = 0; j < numberOfGeoms; ++ j){
-			  if (j == lightIndex)
-				  continue;
-		    if(geoms[j].type == SPHERE){
-		      updateDistance = sphereIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
-			    if(updateDistance != -1 && updateDistance < lightDistance){
-			      lightFlag = false;
-			      break;
-			    }
-		    }else if (geoms[j].type == CUBE){
-			    updateDistance = boxIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
-			    if(updateDistance != -1 && updateDistance < lightDistance){
-				    lightFlag = false;
-				    break;
-		 	    }
-		    }
-			} // for objects j
+      // Using the distance from the light source to the intersection point to determine whether the light is obstructed by other objects
+      bool lightFlag = true;
+      for(int j = 0; j < numberOfGeoms; ++ j){
+	if (j == lightIndex)
+	  continue;
+	if(geoms[j].type == SPHERE){
+	  updateDistance = sphereIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
+	  if(updateDistance != -1 && updateDistance < lightDistance){
+	    lightFlag = false;
+	    break;
+	  }
+	}else if (geoms[j].type == CUBE){
+	  updateDistance = boxIntersectionTest(geoms[j], inverseLightRay, updateIntersectionPoint, updateNormal);
+	  if(updateDistance != -1 && updateDistance < lightDistance){
+	    lightFlag = false;
+	    break;
+	  }
+	}
+      } // for objects j
 
-		  //If there is light on the object then compute the diffusion and the highlighting
-	    if (lightFlag == true) {
-	      // Factors for diffusion and shading
-	      float diffusionCoefficient = 1.0f;
-		    // Lambertian Surface Diffusion
-	  	  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
-				updateColors  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color / (float)numberOfLights;	  	  
-			} // if lightFlag
+      //If there is light on the object then compute the diffusion and the highlighting
+      if (lightFlag == true) {
+	// Factors for diffusion and shading
+	float diffusionCoefficient = 1.0f;
+	// Lambertian Surface Diffusion
+	float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
+	updateColors  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color / (float)numberOfLights;	  	  
+      } // if lightFlag
 			
-			//According to the sample scene, only when the materials[i].indexOfRefraction is positive then the object is glossy
-			if(materials[materialIndex].indexOfRefraction > 0) {
-				float specularCoefficient  = 1.0f;
-			  // Phong Highlighting (Here using the Blinn-Phong lighting so as to make the specular more clear, H = L + V = L - C)
-		    glm::vec3 halfwayVector = glm::normalize(inverseLightRay.direction - cameraRay.direction);
-		    float specular = specularCoefficient * pow(max(glm::dot(halfwayVector, normal), 0.0f), materials[materialIndex].specularExponent);
-			  updateColors  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor * materials[geoms[lightIndex].materialid].emittance / (float)numberOfLights;
-			} // if glossy
+      //According to the sample scene, only when the materials[i].indexOfRefraction is positive then the object is glossy
+      if(materials[materialIndex].indexOfRefraction > 0) {
+	float specularCoefficient  = 1.0f;
+	// Phong Highlighting (Here using the Blinn-Phong lighting so as to make the specular more clear, H = L + V = L - C)
+	glm::vec3 halfwayVector = glm::normalize(inverseLightRay.direction - cameraRay.direction);
+	float specular = specularCoefficient * pow(max(glm::dot(halfwayVector, normal), 0.0f), materials[materialIndex].specularExponent);
+	updateColors  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor * materials[geoms[lightIndex].materialid].emittance / (float)numberOfLights;
+      } // if glossy
 
     } // for i lights
-	} // if material
+  } // if material
 	
-	// Filter the unstable light
-	colors[index] = colors[index] * (time - 1) / time + updateColors / time;
+  // Filter the unstable light
+  colors[index] = colors[index] * (time - 1) / time + updateColors / time;
 
-	// Ambient Light
-	float ambientCoefficient   = 1e-1f;
-	colors[index] += ambientCoefficient * materials[materialIndex].color / time;
+  // Ambient Light
+  float ambientCoefficient   = 1e-1f;
+  colors[index] += ambientCoefficient * materials[materialIndex].color / time;
 } // end of function
  
 //TODO: FINISH THIS FUNCTION
@@ -260,11 +259,11 @@ void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iteratio
     newStaticGeom.inverseTransform = geoms[i].inverseTransforms[frame];
     geomList[i] = newStaticGeom;
 
-	  // Calculate the number of light and record the light source object index
-	  if( materials[newStaticGeom.materialid].emittance > 0 ){
-		  lights[numberOfLights] = i;
-		  ++ numberOfLights;
-	  }
+    // Calculate the number of light and record the light source object index
+    if( materials[newStaticGeom.materialid].emittance > 0 ){
+      lights[numberOfLights] = i;
+      ++ numberOfLights;
+    }
   }
   
   staticGeom* cudageoms = NULL;
