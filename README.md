@@ -80,7 +80,12 @@ Ray Tracing Pseudo-Codes: http://www.cs.unc.edu/~rademach/xroads-RT/RTarticle.ht
 
 Box Intersection: http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-sphere-intersection/
 
+Cosine-weighted Distribution: http://web.cs.wpi.edu/~emmanuel/courses/cs563/S07/talks/emmanuel_agu_mc_wk10_p2.pdf
 
+Sphere Geometry: http://en.wikipedia.org/wiki/Sphere
 
+Lambertian Surface: http://en.wikipedia.org/wiki/Lambertian
 
+Blinn Phong Lighting: http://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model
 
+Ambient Lighting: http://en.wikipedia.org/wiki/Phong_shading
