@@ -50,6 +50,8 @@ This is the video of the rendering process.
 
 ![[ScreenShot](https://raw.github.com/GabriellaQiong/Project1-RayTracer/master/09222119snip.PNG](http://www.youtube.com/watch?v=c3I9oAfzO8w)
 
+The youtube link is here if you cannot open the video in the markdown file: http://www.youtube.com/watch?v=c3I9oAfzO8w
+
 
 * Performance evaluation
 
