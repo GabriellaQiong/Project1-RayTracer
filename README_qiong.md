@@ -10,39 +10,62 @@ Qiong Wang
 
 
 * Description of the project
+
 Considering each pixel in the image, we can find one ray from the camera. Along the ray, we can find the nearest object in the environment. And after determining whether the object is the light source, we can find specific color on the intersection and then pull it back on the pixel in the image. When computing the color of the intersection point, the diffusion, specular, ambient light are all considered for rendering the whole environment.
+
 
 * Features implemented
  
-   Raycasting from a camera into a scene through a pixel grid
+   1. Raycasting from a camera into a scene through a pixel grid
 
-   Phong lighting for one point light source
+   2. Phong lighting for one point light source
    
-   Diffuse lambertian surfaces
+   3. Diffuse lambertian surfaces
    
-   Raytraced shadows
+   4. Raytraced shadows
    
-   Cube intersection testing
+   5. Cube intersection testing
    
-   Sphere surface point sampling
+   6. Sphere surface point sampling
    
-   Specular reflection (not so good)
+   7. Specular reflection (optional)
    
-   Note: I will try to add the field of view feature soon
+   8. Soft shadows and area lights (optional)
+
 
 * Screen shots
 
-Sorry, I will put the photo here soon. The screen shots have been included in the git.
+This is the screen shot when the code is running.
+
+![ScreenShot](https://raw.github.com/GabriellaQiong/Project1-RayTracer/master/09222118snip.PNG)
+
+This is the final render image.
+
+![ScreenShot](https://raw.github.com/GabriellaQiong/Project1-RayTracer/master/09222119snip.PNG)
+
 
 * Video of project
 
-It is in the git as well. I will put it in this markdown file soon. Sorry about that.
+This is the video of the rendering process.
+
+![[ScreenShot](https://raw.github.com/GabriellaQiong/Project1-RayTracer/master/09222119snip.PNG](http://www.youtube.com/watch?v=c3I9oAfzO8w)
+
 
 * Performance evaluation
 
-I have tried to change the number of tiles to see whether the frame per second have changed accordingly.
+Here is the table for the performance evaluation when changing the size of tile. We can easily find that when the tile size become larger the fps increases at the same time.
+
+| tileSize  |     time for running 1000 iteration    |  approximate fps |
+|:---------:|:--------------------------------------:|:----------------:|
+|     1     |               2 : 22.7                 |       7.00       |
+|     2     |               0 : 49.2                 |       20.33      |
+|     4     |               0 : 17.4                 |       57.47      |
+|     8     |               0 : 16.9                 |       59.17      |
+|    16     |               0 : 16.5                 |       60.61      |
+
+
 
 * Some words must say
 
-As an engineer in computer vision area, using GPU to do ray tracing with rendering is fantastic and totally new for me. Although the current result is not even good so far. I can say I have tried my best to learn and to do. I will also keep on improving it. Thanks to Patrick and Liam.
+As an engineer in computer vision area, using GPU to do ray tracing with rendering is fantastic and totally new for me. Although it was two days later than the deadline when I finished all these, I am so happy to get some good results. Thanks to Patrick and Liam.
 
