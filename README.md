@@ -71,3 +71,16 @@ Here is the table for the performance evaluation when changing the size of tile.
 
 As an engineer in computer vision area, using GPU to do ray tracing with rendering is fantastic and totally new for me. Although it was two days later than the deadline when I finished all these, I am so happy to get some good results. Thanks to Patrick and Liam.
 
+
+* References
+
+Ray Tracing Algorithm: http://cse.csusb.edu/tong/courses/cs621/notes/ray.php
+
+Ray Tracing Pseudo-Codes: http://www.cs.unc.edu/~rademach/xroads-RT/RTarticle.html
+
+Box Intersection: http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-sphere-intersection/
+
+
+
+
+
