@@ -109,25 +109,25 @@ __global__ void sendImageToPBO(uchar4* PBOpos, glm::vec2 resolution, glm::vec3* 
 //Core raytracer kernel
 __global__ void raytraceRay(glm::vec2 resolution, float time, material* materials, int numberOfMaterials, cameraData cam, int rayDepth, glm::vec3* colors,
                             staticGeom* geoms, int numberOfGeoms, int* lights, int numberOfLights){
-
-
-  int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+  
+	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
   int y = (blockIdx.y * blockDim.y) + threadIdx.y;
   int index = x + (y * resolution.x);
 
   // Initialize the color
-	colors[index] = glm::vec3(0, 0, 0);
+	//colors[index] = glm::vec3(0);
+	glm::vec3 updateColors = glm::vec3(0);
 
 	// Skip the pixels outside the image
-	if((x > resolution.x && y > resolution.y)){
+	if(x > resolution.x || y > resolution.y)
 		return;
-	}
+
 	// Generate the ray
 	ray cameraRay = raycastFromCameraKernel(resolution, time, x, y, cam.position, cam.view, cam.up, cam.fov);
 	  
 	// Initialize the object index, distance and the intersection point and the normal
   int objectIndex = -1;
-  float updateDistance, distance = 1e7;
+  float updateDistance, distance = 1e7f;
   glm::vec3 updateIntersectionPoint, intersectionPoint;
   glm::vec3 updateNormal, normal;
 
@@ -154,9 +154,8 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
   } // for i
 	
 	// If there is no object, return
-	if(objectIndex == -1){
+	if(objectIndex == -1)
 	  return;
-	}
  
 	// Initialize the material index
 	int materialIndex = geoms[objectIndex].materialid;
@@ -164,7 +163,7 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 	// Determine if the object itself can be treated as light source
 	if(materials[materialIndex].emittance > 0) {
 	  // If the object is a light source, then the color in the image is it own
-		colors[index] = materials[materialIndex].color;
+		updateColors = materials[materialIndex].color;
 	} else {
 		// Find the inverse light ray from intersection point to a random point on the light source
 		ray lightRay, inverseLightRay, reflectionRay;
@@ -198,25 +197,34 @@ __global__ void raytraceRay(glm::vec2 resolution, float time, material* material
 		 	    }
 		    }
 			} // for objects j
-		  // If there is light on the object then compute the diffusion and the highlighting
-	    if (lightFlag == true){
-	      // Factors for diffusion and shading
-	      float diffusionCoefficient = 0.7f;
-		    float specularCoefficient  = 0.2f;
 
-  		  // Lambertian Surface Diffusion
+		  //If there is light on the object then compute the diffusion and the highlighting
+	    if (lightFlag == true) {
+	      // Factors for diffusion and shading
+	      float diffusionCoefficient = 1.0f;
+		    // Lambertian Surface Diffusion
 	  	  float diffuse  = diffusionCoefficient * glm::max(glm::dot(inverseLightRay.direction, normal), 0.0f);
-				colors[index]  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color/ (float)numberOfLights;
-	  	  // Phong Highlighting (Phong lighting equation: ambient + diffuse + specular =  phong reflection)
-		    reflectionRay.direction = calculateReflectionDirection(normal, lightRay.direction);
-		    float specular = specularCoefficient * pow(max((float)glm::dot(inverseLightRay.direction-cameraRay.direction, normal), 0.0f), materials[materialIndex].specularExponent);
-				colors[index]  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor / (float)numberOfLights;
+				updateColors  += diffuse * materials[geoms[lightIndex].materialid].color * materials[materialIndex].color / (float)numberOfLights;	  	  
 			} // if lightFlag
+			
+			//According to the sample scene, only when the materials[i].indexOfRefraction is positive then the object is glossy
+			if(materials[materialIndex].indexOfRefraction > 0) {
+				float specularCoefficient  = 1.0f;
+			  // Phong Highlighting (Here using the Blinn-Phong lighting so as to make the specular more clear, H = L + V = L - C)
+		    glm::vec3 halfwayVector = glm::normalize(inverseLightRay.direction - cameraRay.direction);
+		    float specular = specularCoefficient * pow(max(glm::dot(halfwayVector, normal), 0.0f), materials[materialIndex].specularExponent);
+			  updateColors  += specular * materials[geoms[lightIndex].materialid].color * materials[materialIndex].specularColor * materials[geoms[lightIndex].materialid].emittance / (float)numberOfLights;
+			} // if glossy
+
     } // for i lights
 	} // if material
+	
+	// Filter the unstable light
+	colors[index] = colors[index] * (time - 1) / time + updateColors / time;
+
 	// Ambient Light
-	float ambientCoefficient   = 1e-3f;
-	colors[index] += ambientCoefficient * materials[geoms[objectIndex].materialid].color;
+	float ambientCoefficient   = 1e-1f;
+	colors[index] += ambientCoefficient * materials[materialIndex].color / time;
 } // end of function
  
 //TODO: FINISH THIS FUNCTION
@@ -226,7 +234,7 @@ void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iteratio
   int traceDepth = 1; //determines how many bounces the raytracer traces
 
   // set up crucial magic
-  int tileSize = 16;
+  int tileSize = 32;
   dim3 threadsPerBlock(tileSize, tileSize);
   dim3 fullBlocksPerGrid((int)ceil(float(renderCam->resolution.x)/float(tileSize)), (int)ceil(float(renderCam->resolution.y)/float(tileSize)));
   
@@ -252,11 +260,11 @@ void cudaRaytraceCore(uchar4* PBOpos, camera* renderCam, int frame, int iteratio
     newStaticGeom.inverseTransform = geoms[i].inverseTransforms[frame];
     geomList[i] = newStaticGeom;
 
-	// Calculate the number of light and record the light source object index
-	if( materials[newStaticGeom.materialid].emittance > 0 ){
-		lights[numberOfLights] = i;
-		++ numberOfLights;
-	}
+	  // Calculate the number of light and record the light source object index
+	  if( materials[newStaticGeom.materialid].emittance > 0 ){
+		  lights[numberOfLights] = i;
+		  ++ numberOfLights;
+	  }
   }
   
   staticGeom* cudageoms = NULL;

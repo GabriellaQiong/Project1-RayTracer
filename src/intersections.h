@@ -43,7 +43,8 @@ __host__ __device__ bool epsilonCheck(float a, float b){
 
 //Self explanatory
 __host__ __device__ glm::vec3 getPointOnRay(ray r, float t){
-  return r.origin + float(t-.0001)*glm::normalize(r.direction);
+	// Add a big epsilon amount .001 forward along the shadow ray (.0001 previously) so as to avoid floating problem
+  return r.origin + float(t-.001)*glm::normalize(r.direction);
 }
 
 //LOOK: This is a custom function for multiplying cudaMat4 4x4 matrixes with vectors.
@@ -310,7 +311,7 @@ __host__ __device__ glm::vec3 getRandomPointOnSphere(staticGeom sphere, float ra
 	glm::vec3 randPoint = multiplyMV(sphere.transform, glm::vec4(point,1.0f));
 
 	return randPoint;
-	}
+}
 
 #endif
 

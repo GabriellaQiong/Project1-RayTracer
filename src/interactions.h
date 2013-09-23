@@ -46,7 +46,7 @@ __host__ __device__ glm::vec3 calculateTransmissionDirection(glm::vec3 normal, g
 //TODO (OPTIONAL): IMPLEMENT THIS FUNCTION -- This is Done
 __host__ __device__ glm::vec3 calculateReflectionDirection(glm::vec3 normal, glm::vec3 incident) {
   //nothing fancy here (simple vector addition)
-  return (incident - 2.0f * glm::dot(incident, normal) * normal);
+  return (glm::normalize(incident - 2.0f * glm::dot(incident, normal) * normal));
 }
 
 //TODO (OPTIONAL): IMPLEMENT THIS FUNCTION
@@ -103,7 +103,7 @@ __host__ __device__ int calculateBSDF(ray& r, glm::vec3 intersect, glm::vec3 nor
                                        AbsorptionAndScatteringProperties& currentAbsorptionAndScattering,
                                        glm::vec3& color, glm::vec3& unabsorbedColor, material m){
   //return 1;
-  return 0;
+  return 1;
 };
 
 #endif
